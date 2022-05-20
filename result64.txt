@@ -1,0 +1,92 @@
+NSG64 Product Search
+query num 10000
+search time: 14.2748
+query per s: 700.536
+0.8074
+ K:: 1
+ L:: 100
+search time: 14.2709
+query per s: 700.726
+0.86127
+ K:: 10
+ L:: 100
+search time: 14.995
+query per s: 666.888
+0.880996
+ K:: 50
+ L:: 100
+search time: 13.2649
+query per s: 753.869
+0.882885
+ K:: 100
+ L:: 100
+
+NSG64 Progress Search
+query num 10000
+search time: 13.4791
+query per s: 741.888
+0.8074
+ K:: 1
+ L:: 100
+search time: 14.1063
+query per s: 708.906
+0.86127
+ K:: 10
+ L:: 100
+search time: 13.6242
+query per s: 733.988
+0.880996
+ K:: 50
+ L:: 100
+search time: 13.4583
+query per s: 743.033
+0.882885
+ K:: 100
+ L:: 100
+
+NSG64 Progress Search
+query num 10000
+search time: 51.4548
+query per s: 194.345
+0.8083
+ K:: 1
+ L:: 500
+search time: 51.4574
+query per s: 194.336
+0.86339
+ K:: 10
+ L:: 500
+search time: 51.7545
+query per s: 193.22
+0.887232
+ K:: 50
+ L:: 500
+search time: 52.2897
+query per s: 191.242
+0.895369
+ K:: 100
+ L:: 500
+
+NSG64 Product Search
+query num 10000
+search time: 51.2592
+query per s: 195.087
+0.8083
+ K:: 1
+ L:: 500
+search time: 52.1055
+query per s: 191.918
+0.86339
+ K:: 10
+ L:: 500
+search time: 50.7879
+query per s: 196.897
+0.887232
+ K:: 50
+ L:: 500
+search time: 51.4064
+query per s: 194.528
+0.895369
+ K:: 100
+ L:: 500
+
