@@ -21,8 +21,8 @@ struct quant_item {
     int quant_mod;
     float loss, value;
 
-    bool operator < (const quant_item &a) const {
-        return value > a.value;
+    bool operator<(const quant_item &a) const {
+        return value < a.value;
     }
 };
 
@@ -322,11 +322,13 @@ float quant_item_promote(float *data_item, unsigned id, unsigned dim, unsigned s
     else if (sub_dim == 2) codebook_id = 1;
     else if (sub_dim == 4) codebook_id = 0;
     float all_dist = 0;
+    //std::cout<<sub_dim<<" \n";
     quant_vector[id].resize(dim / sub_dim);
     for (unsigned i = 0, sub_id = 0; i < dim; i += sub_dim, sub_id++) {
         int belong = -1;
         float dist = 0.00;
         for (unsigned k = 0; k < K; k++) {
+            //std::cout<<codebook_id<<" "<<sub_id<<" "<<k<<" \n";
             float new_dist = dist_vec(data_item, sub_dim, all_code_vec[codebook_id][sub_id][k]);
             if (belong == -1) {
                 belong = k;
@@ -379,7 +381,7 @@ int main(int argc, char **argv) {
     unsigned cluster_count = (unsigned) atoi(argv[3]);
     unsigned sub_len = dim / sub_count;
     unsigned sub_dim = sub_len;
-    int require_size = 10086;
+    int require_size = 64000000;
     std::cout << sub_len << " " << cluster_count << std::endl;
     if (isFileExists_ifstream("code_vec32.nsg")) {
         Load_code_book_ifsteam("code_vec32.nsg");
@@ -407,27 +409,40 @@ int main(int argc, char **argv) {
     int all_size = 0;
     for (int i = 0; i < data_num; i++) {
         quant_item u;
+        if (i % 10000 == 0) {
+            printf("finished %d\n", i);
+        }
+
         u.id = i;
-        u.loss = quant_item_promote(full_data + i, i, dim, 32, cluster_count);
+        u.loss = quant_item_promote(full_data + i*dim, i, dim, 4, cluster_count);
         u.quant_mod = 0;
-        u.value = u.loss - quant_item_loss_calc(full_data + i, dim, 64, cluster_count);
+        u.value = u.loss - quant_item_loss_calc(full_data + i, dim, 2, cluster_count);
         quant_queue.push(u);
         all_size += 32;
     }
+    printf("all szie %d\n",all_size);
     while (all_size < require_size) {
         quant_item u = quant_queue.top();
         quant_queue.pop();
         if (u.value < 0) break;
         if (u.quant_mod == 2) break;
+        all_size -= (32 * (1 << u.quant_mod));
         u.quant_mod += 1;
+        all_size += (32 * (1 << u.quant_mod));
         int next_sub_dim = dim / (32 * (1 << u.quant_mod));
-        u.loss = quant_item_promote(full_data + u.id, u.id, dim, next_sub_dim, cluster_count);
+        u.loss = quant_item_promote(full_data + u.id*dim, u.id, dim, next_sub_dim, cluster_count);
         next_sub_dim = dim / (32 * (1 << u.quant_mod));
         if (u.quant_mod == 2) u.value = 0;
         else u.value = u.loss - quant_item_loss_calc(full_data + u.id, dim, next_sub_dim, cluster_count);
     }
 
-
+    int cnt0 = 0, cnt1 = 0, cnt2 = 0;
+    for (int i = 0; i < data_num; i++) {
+        if (quant_vector[i].size() == 32) cnt0++;
+        else if (quant_vector[i].size() == 64) cnt1++;
+        else cnt2++;
+    }
+    printf(" size count %d %d %d\n", cnt0, cnt1, cnt2);
 
 
 
@@ -455,6 +470,7 @@ int main(int argc, char **argv) {
     //128 loss is 92.733989
     //64 loss is 670.847607
     //32 loss is 3929.065150
+    // 315962
     efanna2e::IndexNSG index(dim, data_num, efanna2e::L2, nullptr);
     index.Load(argv[5]);
     efanna2e::Parameters paras;
