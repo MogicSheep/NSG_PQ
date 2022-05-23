@@ -148,13 +148,18 @@ void Load_code_book(const char *filename) {
     scanf("%d %d %d", &x, &y, &z);
     code_vec.resize(x);
     for (int i = 0; i < x; i++) {
-        code_vec[i].resize(y);
+        code_vec[i].resize(65536);
         for (int j = 0; j < y; j++) {
             code_vec[i][j].resize(z);
             for (int k = 0; k < z; k++) {
                 scanf("%f", &code_vec[i][j][k]);
             }
         }
+        for(int j=y;j<65536;j++)
+        {
+            code_vec[i][j].resize(z);
+        }
+
     }
     fclose(stdin);
 }
@@ -298,8 +303,8 @@ int main(int argc, char **argv) {
     unsigned cluster_count = (unsigned) atoi(argv[3]);
     unsigned sub_len = dim / sub_count;
     std::cout << sub_len << " " << cluster_count << std::endl;
-    if (isFileExists_ifstream("code_vec64_4096.nsg")) {
-        Load_code_book("code_vec64_4096.nsg");
+    if (isFileExists_ifstream("code_vec64.nsg")) {
+        Load_code_book("code_vec64.nsg");
     } else {
         code_vec.resize(sub_count);
         for (int i = 0; i < sub_count; i++) {
@@ -333,8 +338,8 @@ int main(int argc, char **argv) {
 //        }
 //    }
 //    0 16 35 5 32 31 14 10
-    if (isFileExists_ifstream("quanti_vec_4096.nsg")) {
-        Load_quantization_data("quanti_vec_4096.nsg");
+    if (isFileExists_ifstream("quanti_vec64.nsg")) {
+        Load_quantization_data("quanti_vec64.nsg");
     } else {
         quant_vector.resize(data_num);
         for (int i = 0; i < data_num; i++) {
@@ -379,18 +384,18 @@ int main(int argc, char **argv) {
     load_data_int(argv[9], ground_load, ground_num, ground_dim);
 
 
-    index.full_hash_table.resize(cluster_count * sub_count);
+    index.full_hash_table.resize(65536 * sub_count);
     index.progress_hash_table.resize(cluster_count * sub_count);
     index.code_vec.swap(code_vec);
     index.quant_vector.swap(quant_vector);
-    index.cluster_num = cluster_count;
+    index.cluster_num = 65536;
     index.sub_dim = sub_len;
     index.sub_count = sub_count;
     std::cout << "Search Module:: Product Search" << std::endl;
     std::vector<std::vector<unsigned> > res;
     std::cout << "query num " << query_num << " \n";
     printf("K:: %d\n", K);
-    for (L = 1; L <= 401; L += 1) {
+    for (L = 1; L <= 401; L += 2) {
         //std::cout << " K:: " << K << std::endl;
         //std::cout << " L:: " << L << std::endl;
         double PQ_search = 0.0, PP_search = 0.0, PT_search = 0.0;
@@ -402,9 +407,17 @@ int main(int argc, char **argv) {
         for (unsigned i = 0; i < query_num; i++) {
             std::vector<unsigned> tmp(K);
             //index.Search(query_load + i * dim, full_data, K, paras, tmp.data());
-            index.Product_Search(query_load + i * dim, K, paras, tmp.data());
-            //index.Product_Progress_Search(query_load + i * dim, K, paras, tmp.data());
-            //index.Product_Table_Search(query_load + i * dim, K, paras, tmp.data());
+            float* qq = query_load + i * dim;
+            for (unsigned i = 0, sub_id = 0; i < dim; i += index.sub_dim, sub_id++) {
+                for (unsigned j = 0; j < index.cluster_num; j++) {
+                    int map_id = sub_id * index.cluster_num + j;
+                    float res = 0.0;
+                    for (unsigned k = 0; k < index.sub_dim; k++) {
+                        res += (qq[i + k] - index.code_vec[sub_id][j][k]) * (qq[i + k] - index.code_vec[sub_id][j][k]);
+                    }
+                    index.full_hash_table[map_id] = res;
+                }
+            }
             res.push_back(tmp);
         }
 
@@ -412,49 +425,52 @@ int main(int argc, char **argv) {
         std::chrono::duration<double> diff = e - s;
         double time_slap = diff.count();
         PQ_search = time_slap;
+        printf("%f\n",PQ_search);
         float recall = test_result(res, ground_load, query_num, K);
         float Qms = query_num / time_slap / 1000.00;
-        //printf("%d,%f,%f\n",K,recall,Qms);
-        //std::cout<<"Search times:: "<<time_slap<<std::endl;
-        //printf("Progress Search\n");
-        res.clear();
-        s = std::chrono::high_resolution_clock::now();
-        for (unsigned i = 0; i < query_num; i++) {
-            std::vector<unsigned> tmp(K);
-            index.Search(query_load + i * dim, full_data, K, paras, tmp.data());
-            //index.Product_Search(query_load + i * dim, K, paras, tmp.data());
-            //index.Product_Progress_Search(query_load + i * dim, K, paras, tmp.data());
-            //index.Product_Table_Search(query_load + i * dim, K, paras, tmp.data());
-            res.push_back(tmp);
-        }
-
-        e = std::chrono::high_resolution_clock::now();
-        diff = e - s;
-        time_slap = diff.count();
-        //std::cout << "search time: " << time_slap << std::endl;
-        //std::cout << "query per s: " << query_num * 1.0 / time_slap << std::endl;
-        //std::cout << test_result(res, ground_load, query_num, K) << std::endl;
-        PP_search = time_slap;
-        //printf("Tabel Search\n");
-        res.clear();
-        s = std::chrono::high_resolution_clock::now();
-        for (unsigned i = 0; i < query_num; i++) {
-            std::vector<unsigned> tmp(K);
-            //index.Search(query_load + i * dim, full_data, K, paras, tmp.data());
-            //index.Product_Search(query_load + i * dim, K, paras, tmp.data());
-            //index.Product_Progress_Search(query_load + i * dim, K, paras, tmp.data());
-            index.Product_Table_Search(query_load + i * dim, K, paras, tmp.data());
-            res.push_back(tmp);
-        }
-        e = std::chrono::high_resolution_clock::now();
-        diff = e - s;
-        time_slap = diff.count();
-        PT_search = time_slap;
-        //std::cout << "search time: " << time_slap << std::endl;
-        //std::cout << "query per s: " << query_num * 1.0 / time_slap << std::endl;
-        double recall_rate = test_result(res, ground_load, query_num, K);
-        printf("%f %f %f %f\n",recall_rate,PQ_search,PP_search,PT_search);
+//        //printf("%d,%f,%f\n",K,recall,Qms);
+//        //std::cout<<"Search times:: "<<time_slap<<std::endl;
+//        //printf("Progress Search\n");
+//        res.clear();
+//        s = std::chrono::high_resolution_clock::now();
+//        for (unsigned i = 0; i < query_num; i++) {
+//            std::vector<unsigned> tmp(K);
+//            //index.Search(query_load + i * dim, full_data, K, paras, tmp.data());
+//            //index.Product_Search(query_load + i * dim, K, paras, tmp.data());
+//            index.Product_Progress_Search(query_load + i * dim, K, paras, tmp.data());
+//            //index.Product_Table_Search(query_load + i * dim, K, paras, tmp.data());
+//            res.push_back(tmp);
+//        }
+//
+//        e = std::chrono::high_resolution_clock::now();
+//        diff = e - s;
+//        time_slap = diff.count();
+//        //std::cout << "search time: " << time_slap << std::endl;
+//        //std::cout << "query per s: " << query_num * 1.0 / time_slap << std::endl;
+//        //std::cout << test_result(res, ground_load, query_num, K) << std::endl;
+//        PP_search = time_slap;
+//        //printf("Tabel Search\n");
+//        res.clear();
+//        s = std::chrono::high_resolution_clock::now();
+//        for (unsigned i = 0; i < query_num; i++) {
+//            std::vector<unsigned> tmp(K);
+//            //index.Search(query_load + i * dim, full_data, K, paras, tmp.data());
+//            //index.Product_Search(query_load + i * dim, K, paras, tmp.data());
+//            //index.Product_Progress_Search(query_load + i * dim, K, paras, tmp.data());
+//            index.Product_Table_Search(query_load + i * dim, K, paras, tmp.data());
+//            res.push_back(tmp);
+//        }
+//        e = std::chrono::high_resolution_clock::now();
+//        diff = e - s;
+//        time_slap = diff.count();
+//        PT_search = time_slap;
+//        //std::cout << "search time: " << time_slap << std::endl;
+//        //std::cout << "query per s: " << query_num * 1.0 / time_slap << std::endl;
+//        double recall_rate = test_result(res, ground_load, query_num, K);
+        //printf("%f %f %f %f\n",recall_rate,PQ_search,PP_search,PT_search);
     }
 
     return 0;
 }
+
+
