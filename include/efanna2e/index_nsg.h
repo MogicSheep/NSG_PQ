@@ -50,6 +50,12 @@ class IndexNSG : public Index {
             const Parameters &parameters,
             unsigned *indices);
 
+    void Product_Hybrid_Search(
+            const float *query,
+            size_t k,
+            const Parameters &parameters,
+            unsigned *indices);
+
   void Single_Search(
         const float *query,
         const float *x,
@@ -66,13 +72,15 @@ class IndexNSG : public Index {
   float full_table_dist(const unsigned id,const float *q,const unsigned &dim,const unsigned &sub_dim);
   float progress_table_dist(const unsigned id,const float *q,const unsigned &dim,const unsigned &sub_dim,boost::dynamic_bitset<> &progress_bitset);
   float product_dist_calc(const unsigned id,const float *q,const unsigned &dim,const unsigned &sub_dim);
-  void enhance();
+  float product_hybrid_calc(const unsigned id, const float *q, const unsigned int &dim);
+    void enhance();
   void BFS();
   void Energy_Calc(float* energy);
 
     std::vector<float> full_hash_table;
     std::vector<float> progress_hash_table;
     std::vector<std::vector<std::vector<float> > > code_vec;
+    std::vector<std::vector<std::vector<float> > > all_code_vec[3];
     std::vector<std::vector<short> > quant_vector;
     unsigned cluster_num = 256;
     unsigned sub_dim = 2;

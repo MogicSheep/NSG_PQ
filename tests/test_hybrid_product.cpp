@@ -219,6 +219,36 @@ void Load_quantization_data(const char *filename) {
 }
 
 
+void Save_Hybrid_Data(const char *filename) {
+    std::ofstream out(filename, std::ios::binary | std::ios::out);
+    unsigned sub_count = quant_vector.size();
+    out.write((char *) &sub_count, sizeof(unsigned));
+    for (unsigned i = 0; i < sub_count; i++) {
+        unsigned length = quant_vector[i].size();
+        out.write((char *) &length, sizeof(unsigned char));
+        for (unsigned j = 0; j < length; j++) {
+            out.write((char *) &quant_vector[i][j], sizeof(unsigned char));
+        }
+    }
+    out.close();
+}
+
+void Load_Hybrid_Data(const char *filename) {
+    std::ifstream in(filename, std::ios::binary);
+    unsigned sub_count, sub_dim;
+    in.read((char *) &sub_count, sizeof(unsigned));
+    for (unsigned i = 0; i < sub_count; i++) {
+        unsigned length;
+        in.read((char *) &length, sizeof(unsigned char));
+        quant_vector[i].resize(length);
+        for (unsigned j = 0; j < length; j++) {
+            in.read((char *) &quant_vector[i][j], sizeof(unsigned char));
+        }
+    }
+    in.close();
+}
+
+
 void generate_K_means(float *&data, int dim, int train_num, int K, int iter_count, int code_count) {
     std::vector<std::vector<float> > cluster;
     std::vector<int> node_cluster;
@@ -302,7 +332,7 @@ float quant_item_loss_calc(float *data_item, int dim, int sub_dim, int K) {
         int belong = -1;
         float dist = 0.00;
         for (int k = 0; k < K; k++) {
-            float new_dist = dist_vec(data_item, sub_dim, all_code_vec[codebook_id][sub_id][k]);
+            float new_dist = dist_vec(data_item+ i , sub_dim, all_code_vec[codebook_id][sub_id][k]);
             if (belong == -1) {
                 belong = k;
                 dist = new_dist;
@@ -313,6 +343,7 @@ float quant_item_loss_calc(float *data_item, int dim, int sub_dim, int K) {
         }
         all_dist += dist;
     }
+    //std::cout<<all_dist<<" need "<<sqrt(all_dist)<<" \n";
     return sqrt(all_dist);
 }
 
@@ -329,7 +360,7 @@ float quant_item_promote(float *data_item, unsigned id, unsigned dim, unsigned s
         float dist = 0.00;
         for (unsigned k = 0; k < K; k++) {
             //std::cout<<codebook_id<<" "<<sub_id<<" "<<k<<" \n";
-            float new_dist = dist_vec(data_item, sub_dim, all_code_vec[codebook_id][sub_id][k]);
+            float new_dist = dist_vec(data_item + i, sub_dim, all_code_vec[codebook_id][sub_id][k]);
             if (belong == -1) {
                 belong = k;
                 dist = new_dist;
@@ -340,7 +371,9 @@ float quant_item_promote(float *data_item, unsigned id, unsigned dim, unsigned s
         }
         all_dist += dist;
         quant_vector[id][sub_id] = belong;
+        //std::cout << belong << " map id \n";
     }
+    //std::cout<<all_dist<<" "<<sqrt(all_dist)<<" \n";
     return sqrt(all_dist);
 }
 
@@ -370,6 +403,29 @@ void generate_product_quantization(float *data, int num, int dim, int sub_dim, i
     }
 }
 
+void test_loss(int data_num, int sub_len, int dim, const float *full_data) {
+    double ans = 0.00, base = 0.00;
+    for (unsigned i = 0; i < data_num; i++) {
+        unsigned codebook_id = -1;
+        if (quant_vector[i].size() == 32) codebook_id = 0, sub_len = 4;
+        else if (quant_vector[i].size() == 64) codebook_id = 1, sub_len = 2;
+        else if (quant_vector[i].size() == 128) codebook_id = 2, sub_len = 1;
+
+        for (unsigned j = 0, sub_id = 0; j < dim; j += sub_len, sub_id++) {
+            int map_id = quant_vector[i][sub_id];
+            for (int k = 0; k < sub_len; k++) {
+                int data_id = i * dim + j + k;
+                ans += (all_code_vec[codebook_id][sub_id][map_id][k] - full_data[data_id]) *
+                       (all_code_vec[codebook_id][sub_id][map_id][k] - full_data[data_id]);
+
+                //printf("%f %f\n", code_vec[sub_id][map_id][k], full_data[data_id]);
+            }
+        }
+        base += 1.0;
+    }
+    printf("loss is %.6f\n", ans / base);
+}
+
 
 int main(int argc, char **argv) {
     srand(0);
@@ -381,7 +437,7 @@ int main(int argc, char **argv) {
     unsigned cluster_count = (unsigned) atoi(argv[3]);
     unsigned sub_len = dim / sub_count;
     unsigned sub_dim = sub_len;
-    int require_size = 64000000;
+    int require_size = 48000000;
     std::cout << sub_len << " " << cluster_count << std::endl;
     if (isFileExists_ifstream("code_vec32.nsg")) {
         Load_code_book_ifsteam("code_vec32.nsg");
@@ -406,6 +462,7 @@ int main(int argc, char **argv) {
 //    0 16 35 5 32 31 14 10
 
     quant_vector.resize(data_num);
+    double all_loss = 0.0;
     int all_size = 0;
     for (int i = 0; i < data_num; i++) {
         quant_item u;
@@ -414,13 +471,17 @@ int main(int argc, char **argv) {
         }
 
         u.id = i;
-        u.loss = quant_item_promote(full_data + i*dim, i, dim, 4, cluster_count);
+        u.loss = quant_item_promote(full_data + i * dim, i, dim, 4, cluster_count);
+        //std::cout << u.loss << " \n";
         u.quant_mod = 0;
-        u.value = u.loss - quant_item_loss_calc(full_data + i, dim, 2, cluster_count);
+        u.value = u.loss - quant_item_loss_calc(full_data + i * dim, dim, 2, cluster_count);
         quant_queue.push(u);
         all_size += 32;
+        all_loss += u.loss;
     }
-    printf("all szie %d\n",all_size);
+    std::cout << all_loss << " \n";
+    test_loss(data_num, sub_len, dim, full_data);
+    printf("all szie %d\n", all_size);
     while (all_size < require_size) {
         quant_item u = quant_queue.top();
         quant_queue.pop();
@@ -430,10 +491,10 @@ int main(int argc, char **argv) {
         u.quant_mod += 1;
         all_size += (32 * (1 << u.quant_mod));
         int next_sub_dim = dim / (32 * (1 << u.quant_mod));
-        u.loss = quant_item_promote(full_data + u.id*dim, u.id, dim, next_sub_dim, cluster_count);
+        u.loss = quant_item_promote(full_data + u.id * dim, u.id, dim, next_sub_dim, cluster_count);
         next_sub_dim = dim / (32 * (1 << u.quant_mod));
         if (u.quant_mod == 2) u.value = 0;
-        else u.value = u.loss - quant_item_loss_calc(full_data + u.id, dim, next_sub_dim, cluster_count);
+        else u.value = u.loss - quant_item_loss_calc(full_data + u.id * dim, dim, next_sub_dim, cluster_count);
     }
 
     int cnt0 = 0, cnt1 = 0, cnt2 = 0;
@@ -495,6 +556,9 @@ int main(int argc, char **argv) {
     index.cluster_num = cluster_count;
     index.sub_dim = sub_len;
     index.sub_count = sub_count;
+    index.all_code_vec[0].swap(all_code_vec[0]);
+    index.all_code_vec[1].swap(all_code_vec[1]);
+    index.all_code_vec[2].swap(all_code_vec[2]);
     std::cout << "Search Module:: Product Search" << std::endl;
     std::vector<std::vector<unsigned> > res;
     std::cout << "query num " << query_num << " \n";
@@ -509,10 +573,11 @@ int main(int argc, char **argv) {
         auto s = std::chrono::high_resolution_clock::now();
         for (unsigned i = 0; i < query_num; i++) {
             std::vector<unsigned> tmp(K);
-            index.Search(query_load + i * dim, full_data, K, paras, tmp.data());
+            //index.Search(query_load + i * dim, full_data, K, paras, tmp.data());
             //index.Product_Search(query_load + i * dim, K, paras, tmp.data());
             //index.Product_Progress_Search(query_load + i * dim, K, paras, tmp.data());
             //index.Product_Table_Search(query_load + i * dim, K, paras, tmp.data());
+            index.Product_Hybrid_Search(query_load + i * dim, K, paras, tmp.data());
             res.push_back(tmp);
         }
 

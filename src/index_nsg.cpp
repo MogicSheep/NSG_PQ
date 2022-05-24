@@ -492,6 +492,23 @@ namespace efanna2e {
         //printf("test id dist is %f\n",ans);
         return ans;
     }
+    float IndexNSG::product_hybrid_calc(const unsigned id, const float *q, const unsigned int &dim) {
+        //printf("porduct id %d\n",id);
+        float ans = 0.0;
+        sub_dim = 128/quant_vector[id].size();
+        int codebook_id = -1;
+        if (sub_dim == 1) codebook_id = 2;
+        else if (sub_dim == 2) codebook_id = 1;
+        else if (sub_dim == 4) codebook_id = 0;
+        for (unsigned i = 0, sub_id = 0; i < dim; i += sub_dim, sub_id++) {
+            int cluster_id = quant_vector[id][sub_id];
+            for (int j = 0; j < sub_dim; j++) {
+                ans += (all_code_vec[codebook_id][sub_id][cluster_id][j] - q[i + j]) * (all_code_vec[codebook_id][sub_id][cluster_id][j] - q[i + j]);
+            }
+        }
+        //printf("test id dist is %f\n",ans);
+        return ans;
+    }
 
     float IndexNSG::progress_table_dist(const unsigned id, const float *q, const unsigned int &dim,
                                         const unsigned int &sub_dim, boost::dynamic_bitset<> &progress_bitset) {
@@ -649,6 +666,71 @@ namespace efanna2e {
             indices[i] = retset[i].id;
         }
     }
+
+    void IndexNSG::Product_Hybrid_Search(const float *query, size_t K,
+                                  const Parameters &parameters, unsigned *indices) {
+        const unsigned L = parameters.Get<unsigned>("L_search");
+
+        std::vector<Neighbor> retset(L + 1);
+        std::vector<unsigned> init_ids(L);
+        boost::dynamic_bitset<> flags{nd_, 0};
+        // std::mt19937 rng(rand());
+        // GenRandom(rng, init_ids.data(), L, (unsigned) nd_);
+
+        unsigned tmp_l = 0;
+        for (; tmp_l < L && tmp_l < final_graph_[ep_].size(); tmp_l++) {
+            init_ids[tmp_l] = final_graph_[ep_][tmp_l];
+            flags[init_ids[tmp_l]] = true;
+        }
+
+        while (tmp_l < L) {
+            unsigned id = rand() % nd_;
+            if (flags[id]) continue;
+            flags[id] = true;
+            init_ids[tmp_l] = id;
+            tmp_l++;
+        }
+
+        for (unsigned i = 0; i < init_ids.size(); i++) {
+            unsigned id = init_ids[i];
+            sub_dim = 128/quant_vector[id].size();
+            float dist = product_hybrid_calc(id, query, dimension_);
+            retset[i] = Neighbor(id, dist, true);
+            // flags[id] = true;
+        }
+
+        std::sort(retset.begin(), retset.begin() + L);
+        int k = 0;
+        while (k < (int) L) {
+            int nk = L;
+
+            if (retset[k].flag) {
+                retset[k].flag = false;
+                unsigned n = retset[k].id;
+
+                for (unsigned m = 0; m < final_graph_[n].size(); ++m) {
+                    unsigned id = final_graph_[n][m];
+                    if (flags[id]) continue;
+                    flags[id] = 1;
+                    sub_dim = 128/quant_vector[id].size();
+                    float dist = product_hybrid_calc(id, query, dimension_);
+                    if (dist >= retset[L - 1].distance) continue;
+                    Neighbor nn(id, dist, true);
+                    int r = InsertIntoPool(retset.data(), L, nn);
+
+                    if (r < nk) nk = r;
+                }
+            }
+            if (nk <= k)
+                k = nk;
+            else
+                ++k;
+        }
+        for (size_t i = 0; i < K; i++) {
+            indices[i] = retset[i].id;
+        }
+    }
+
 
     void IndexNSG::Product_Progress_Search(const float *query, size_t K,
                                            const Parameters &parameters, unsigned *indices) {

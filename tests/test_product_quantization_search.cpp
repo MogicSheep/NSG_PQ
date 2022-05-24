@@ -347,16 +347,20 @@ int main(int argc, char **argv) {
     // TEST loss
     double ans = 0.00,base = 0.00;
     for (int i = 0; i < data_num; i++) {
+        float res = 0;
         for (int j = 0, sub_id = 0; j < dim; j += sub_len, sub_id++) {
             int map_id = quant_vector[i][sub_id];
+            //std::cout<<map_id<<" map:: \n";
             for (int k = 0; k < sub_len; k++) {
                 int data_id = i * dim + j + k;
-                ans += (code_vec[sub_id][map_id][k] - full_data[data_id]) *
+                res += (code_vec[sub_id][map_id][k] - full_data[data_id]) *
                        (code_vec[sub_id][map_id][k] - full_data[data_id]);
 
                 //printf("%f %f\n", code_vec[sub_id][map_id][k], full_data[data_id]);
             }
         }
+        ans += res;
+        //std::cout<<sqrt(res)<<" \n";
         base+=1.0;
     }
     printf("loss is %.6f\n",ans/base);
