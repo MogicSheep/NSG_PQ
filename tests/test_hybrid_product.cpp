@@ -237,6 +237,7 @@ void Load_Hybrid_Data(const char *filename) {
     std::ifstream in(filename, std::ios::binary);
     unsigned sub_count, sub_dim;
     in.read((char *) &sub_count, sizeof(unsigned));
+    quant_vector.resize(sub_count);
     for (unsigned i = 0; i < sub_count; i++) {
         unsigned length;
         in.read((char *) &length, sizeof(unsigned char));
@@ -460,52 +461,55 @@ int main(int argc, char **argv) {
 //        }
 //    }
 //    0 16 35 5 32 31 14 10
+    if (isFileExists_ifstream("quanti_hybird48x1e6.nsg")) {
+        Load_Hybrid_Data("quanti_hybird48x1e6.nsg");
+    }
+    else {
 
-    quant_vector.resize(data_num);
-    double all_loss = 0.0;
-    int all_size = 0;
-    for (int i = 0; i < data_num; i++) {
-        quant_item u;
-        if (i % 10000 == 0) {
-            printf("finished %d\n", i);
+        quant_vector.resize(data_num);
+        double all_loss = 0.0;
+        int all_size = 0;
+        for (int i = 0; i < data_num; i++) {
+            quant_item u;
+            if (i % 10000 == 0) {
+                printf("finished %d\n", i);
+            }
+            u.id = i;
+            u.loss = quant_item_promote(full_data + i * dim, i, dim, 4, cluster_count);
+            //std::cout << u.loss << " \n";
+            u.quant_mod = 0;
+            u.value = u.loss - quant_item_loss_calc(full_data + i * dim, dim, 2, cluster_count);
+            quant_queue.push(u);
+            all_size += 32;
+            all_loss += u.loss;
+        }
+        std::cout << all_loss << " \n";
+        test_loss(data_num, sub_len, dim, full_data);
+        printf("all szie %d\n", all_size);
+        while (all_size < require_size) {
+            quant_item u = quant_queue.top();
+            quant_queue.pop();
+            if (u.value < 0) break;
+            if (u.quant_mod == 2) break;
+            all_size -= (32 * (1 << u.quant_mod));
+            u.quant_mod += 1;
+            all_size += (32 * (1 << u.quant_mod));
+            int next_sub_dim = dim / (32 * (1 << u.quant_mod));
+            u.loss = quant_item_promote(full_data + u.id * dim, u.id, dim, next_sub_dim, cluster_count);
+            next_sub_dim = dim / (32 * (1 << u.quant_mod));
+            if (u.quant_mod == 2) u.value = 0;
+            else u.value = u.loss - quant_item_loss_calc(full_data + u.id * dim, dim, next_sub_dim, cluster_count);
         }
 
-        u.id = i;
-        u.loss = quant_item_promote(full_data + i * dim, i, dim, 4, cluster_count);
-        //std::cout << u.loss << " \n";
-        u.quant_mod = 0;
-        u.value = u.loss - quant_item_loss_calc(full_data + i * dim, dim, 2, cluster_count);
-        quant_queue.push(u);
-        all_size += 32;
-        all_loss += u.loss;
+        int cnt0 = 0, cnt1 = 0, cnt2 = 0;
+        for (int i = 0; i < data_num; i++) {
+            if (quant_vector[i].size() == 32) cnt0++;
+            else if (quant_vector[i].size() == 64) cnt1++;
+            else cnt2++;
+        }
+        printf(" size count %d %d %d\n", cnt0, cnt1, cnt2);
+        Save_Hybrid_Data("quanti_hybird48x1e6.nsg");
     }
-    std::cout << all_loss << " \n";
-    test_loss(data_num, sub_len, dim, full_data);
-    printf("all szie %d\n", all_size);
-    while (all_size < require_size) {
-        quant_item u = quant_queue.top();
-        quant_queue.pop();
-        if (u.value < 0) break;
-        if (u.quant_mod == 2) break;
-        all_size -= (32 * (1 << u.quant_mod));
-        u.quant_mod += 1;
-        all_size += (32 * (1 << u.quant_mod));
-        int next_sub_dim = dim / (32 * (1 << u.quant_mod));
-        u.loss = quant_item_promote(full_data + u.id * dim, u.id, dim, next_sub_dim, cluster_count);
-        next_sub_dim = dim / (32 * (1 << u.quant_mod));
-        if (u.quant_mod == 2) u.value = 0;
-        else u.value = u.loss - quant_item_loss_calc(full_data + u.id * dim, dim, next_sub_dim, cluster_count);
-    }
-
-    int cnt0 = 0, cnt1 = 0, cnt2 = 0;
-    for (int i = 0; i < data_num; i++) {
-        if (quant_vector[i].size() == 32) cnt0++;
-        else if (quant_vector[i].size() == 64) cnt1++;
-        else cnt2++;
-    }
-    printf(" size count %d %d %d\n", cnt0, cnt1, cnt2);
-
-
 
     // TEST loss
     double ans = 0.00, base = 0.00;
@@ -552,7 +556,7 @@ int main(int argc, char **argv) {
     index.full_hash_table.resize(cluster_count * sub_count);
     index.progress_hash_table.resize(cluster_count * sub_count);
     index.code_vec.swap(code_vec);
-    //index.quant_vector.swap(quant_vector);
+    index.quant_vector.swap(quant_vector);
     index.cluster_num = cluster_count;
     index.sub_dim = sub_len;
     index.sub_count = sub_count;

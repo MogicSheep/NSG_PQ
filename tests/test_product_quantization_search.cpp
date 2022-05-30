@@ -289,6 +289,8 @@ void generate_product_quantization(float *data, int num, int dim, int sub_dim, i
 }
 
 
+
+
 int main(int argc, char **argv) {
     srand(0);
     float *train_data = NULL;
@@ -369,6 +371,13 @@ int main(int argc, char **argv) {
     //32 loss is 3929.065150
     efanna2e::IndexNSG index(dim, data_num, efanna2e::L2, nullptr);
     index.Load(argv[5]);
+
+
+    // TEST connect tag
+
+
+
+
     efanna2e::Parameters paras;
     unsigned L = (unsigned) atoi(argv[6]);
     unsigned K = (unsigned) atoi(argv[7]);

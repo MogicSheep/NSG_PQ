@@ -114,8 +114,9 @@ int main(int argc, char **argv) {
     efanna2e::IndexNSG index(dim, points_num, efanna2e::L2, nullptr);
     index.Load(argv[3]);
     //index.enhance();
-    index.BFS();
-    index.Energy_Calc(node_energy);
+    //index.BFS();
+    //index.Energy_Calc(node_energy);
+    index.Test_neighbor_distance(data_load);
     efanna2e::Parameters paras;
     paras.Set<unsigned>("L_search", L);
     paras.Set<unsigned>("P_search", L);

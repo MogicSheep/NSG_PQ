@@ -68,6 +68,7 @@ class IndexNSG : public Index {
       const Parameters &parameters,
       unsigned *indices);
   void OptimizeGraph(float* data);
+  float Test_neighbor_distance(const float *x);
   float naive_dist_calc(const float *q,const float *p,const unsigned &dim);
   float full_table_dist(const unsigned id,const float *q,const unsigned &dim,const unsigned &sub_dim);
   float progress_table_dist(const unsigned id,const float *q,const unsigned &dim,const unsigned &sub_dim,boost::dynamic_bitset<> &progress_bitset);
@@ -81,7 +82,7 @@ class IndexNSG : public Index {
     std::vector<float> progress_hash_table;
     std::vector<std::vector<std::vector<float> > > code_vec;
     std::vector<std::vector<std::vector<float> > > all_code_vec[3];
-    std::vector<std::vector<short> > quant_vector;
+    std::vector<std::vector<unsigned char> > quant_vector;
     unsigned cluster_num = 256;
     unsigned sub_dim = 2;
     unsigned sub_count = 64;
